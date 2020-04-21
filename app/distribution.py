@@ -7,10 +7,6 @@ from exceptions import SmscApiError
 
 
 _url = "https://smsc.ru/sys/{method}.php?login={login}&psw={password}"
-url_balance = \
-    "https://smsc.ru/sys/balance.php?login={login}&psw={password}&fmt=3"
-url_history = \
-    "https://smsc.ru/sys/get.php?get_messages=1&login={login}&psw={password}&fmt=3"
 
 
 def build_url(method: str,
@@ -49,6 +45,7 @@ async def request_smsc(method: str,
     """
     url = build_url(method, login, password, payload)
     res = await asks.get(url)
+
     try:
         res.raise_for_status()
         res = res.json()
