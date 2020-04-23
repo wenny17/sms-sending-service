@@ -13,7 +13,7 @@ from hypercorn.trio import serve
 from hypercorn.config import Config as HyperConfig
 
 from db import Database
-from helpers import send_notification
+from helpers import send_notification, get_quantity_of_completed_sms
 
 warnings.filterwarnings("ignore")
 
@@ -24,8 +24,9 @@ app = QuartTrio(__name__)
 
 LOGIN = os.getenv("LOGIN")
 PASSWORD = os.getenv("PASSWORD")
-PHONES = os.getenv("PHONES").split(';')
-MESSAGE = "Привет"
+REDIS_URI = os.getenv("REDIS_URI")
+REDIS_PASSWORD = os.getenv("REDIS_PASSWORD")
+PHONES = os.getenv("PHONES").split(';') or '+389999999;+3877777777'
 
 
 @app.before_serving
@@ -33,7 +34,8 @@ async def connect_db():
     asyncio._set_running_loop(asyncio.get_event_loop())
     redis = await trio_asyncio.run_asyncio(
         aioredis.create_redis_pool(
-            "redis://localhost",
+            REDIS_URI,
+            password=REDIS_PASSWORD,
             encoding='utf-8',
         )
     )
@@ -48,9 +50,7 @@ async def close_db():
 
 @app.route('/')
 async def index():
-    with open('templates/index.html') as f:
-        a = f.read()
-    return a  # await render_template('index.html')
+    return await app.send_static_file("index.html")
 
 
 @app.route('/send/', methods=['POST'])
@@ -61,7 +61,6 @@ async def get_message():
     await trio_asyncio.run_asyncio(app.db.add_sms_mailing(
         res['id'], PHONES, message
     ))
-    # TODO check errors in res and send to frontend
     return jsonify({})
 
 
@@ -78,20 +77,15 @@ async def ws():
             ]
         }
         for sms in sms_mailings:
-            d = f = 0
-            for sms_status in sms['phones'].values():
-                if sms_status == 'delivered':
-                    d += 1
-                elif sms_status == 'failed':
-                    f += 1
+            delivered, failed = get_quantity_of_completed_sms(sms['phones'])
             response["SMSMailings"].append(
                 {
                     "timestamp": sms['created_at'],
                     "SMSText": sms['text'],
                     "mailingId": str(sms['sms_id']),
                     "totalSMSAmount": sms['phones_count'],
-                    "deliveredSMSAmount": d,
-                    "failedSMSAmount": f,
+                    "deliveredSMSAmount": delivered,
+                    "failedSMSAmount": failed,
                 }
             )
         await websocket.send(json.dumps(response))

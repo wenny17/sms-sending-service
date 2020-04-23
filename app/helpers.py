@@ -26,3 +26,13 @@ async def send_notification(message, phones):
         Methods.SEND, os.getenv('LOGIN'), os.getenv('PASSWORD'), send_payload
     )
     return res
+
+
+def get_quantity_of_completed_sms(phones):
+    delivered = failed = 0
+    for sms_status in phones.values():
+        if sms_status == 'delivered':
+            delivered += 1
+        elif sms_status == 'failed':
+            failed += 1
+    return delivered, failed
